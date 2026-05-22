@@ -1,0 +1,326 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "通用 SQL 查询工具",
+    "description": "支持 MySQL / PostgreSQL / 人大金仓(KingbaseES) / SQLite / MSSQL，提供表名列表、表字段信息及灵活的条件查询能力。",
+    "version": "v2.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://host.docker.internal:18090"
+    }
+  ],
+  "paths": {
+    "/tables": {
+      "post": {
+        "operationId": "GetTableList",
+        "summary": "获取可查询的表名列表",
+        "description": "连接数据库，查询 cx_entity 表，返回所有可查询的表名数组。在工作流中先调用此节点，再将结果传给后续节点使用。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["dbType", "conn"],
+                "properties": {
+                  "dbType": {
+                    "type": "string",
+                    "description": "数据库类型",
+                    "enum": ["mysql", "mysql2", "pg", "postgres", "kingbase", "sqlite", "mssql"]
+                  },
+                  "conn": {
+                    "type": "object",
+                    "description": "数据库连接信息",
+                    "properties": {
+                      "host":     { "type": "string",  "description": "主机地址，SQLite 不需要" },
+                      "port":     { "type": "integer", "description": "端口，MySQL 默认 3306，PostgreSQL/金仓 默认 5432，MSSQL 默认 1433" },
+                      "user":     { "type": "string",  "description": "用户名，SQLite 不需要" },
+                      "password": { "type": "string",  "description": "密码，SQLite 不需要" },
+                      "database": { "type": "string",  "description": "数据库名，SQLite 填文件路径" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "表名列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data":    { "type": "array", "items": { "type": "string" }, "description": "表名数组，例如 [\"user_basic\", \"order_main\"]" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "缺少必要参数" },
+          "500": { "description": "连接失败或查询出错" }
+        }
+      }
+    },
+    "/tablecols": {
+      "post": {
+        "operationId": "GetTableCols",
+        "summary": "获取表的字段信息",
+        "description": "查询 cx_fld 表，返回指定表的所有字段定义（字段名、类型、说明等），可用于动态构造查询条件或展示字段列表。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["dbType", "conn", "tableName"],
+                "properties": {
+                  "dbType": {
+                    "type": "string",
+                    "description": "数据库类型",
+                    "enum": ["mysql", "mysql2", "pg", "postgres", "kingbase", "sqlite", "mssql"]
+                  },
+                  "conn": {
+                    "type": "object",
+                    "description": "数据库连接信息",
+                    "properties": {
+                      "host":     { "type": "string",  "description": "主机地址，SQLite 不需要" },
+                      "port":     { "type": "integer", "description": "端口，MySQL 默认 3306，PostgreSQL/金仓 默认 5432，MSSQL 默认 1433" },
+                      "user":     { "type": "string",  "description": "用户名，SQLite 不需要" },
+                      "password": { "type": "string",  "description": "密码，SQLite 不需要" },
+                      "database": { "type": "string",  "description": "数据库名，SQLite 填文件路径" }
+                    }
+                  },
+                  "tableName": {
+                    "type": "string",
+                    "description": "要查询字段信息的表名，从 GetTableList 返回值中获取",
+                    "example": "user_basic"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "字段信息列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "array",
+                      "description": "字段定义行数组，来自 cx_fld 表",
+                      "items": { "type": "object" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "缺少必要参数" },
+          "500": { "description": "连接失败或查询出错" }
+        }
+      }
+    },
+    "/query": {
+      "post": {
+        "operationId": "QueryData",
+        "summary": "执行条件查询",
+        "description": "根据 FROM / SELECT / WHERE / GROUP BY / ORDER BY 等子句构建并执行 SELECT 语句，支持 JOIN 连表。where 手写条件用 {值} 包裹需转义的值；args 数组条件自动参数化；两种方式可混用，同时传时用 AND 合并。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["dbType", "conn", "from"],
+                "properties": {
+                  "dbType": {
+                    "type": "string",
+                    "description": "数据库类型",
+                    "enum": ["mysql", "mysql2", "pg", "postgres", "kingbase", "sqlite", "mssql"]
+                  },
+                  "conn": {
+                    "type": "object",
+                    "description": "数据库连接信息",
+                    "properties": {
+                      "host":     { "type": "string",  "description": "主机地址，SQLite 不需要" },
+                      "port":     { "type": "integer", "description": "端口，MySQL 默认 3306，PostgreSQL/金仓 默认 5432，MSSQL 默认 1433" },
+                      "user":     { "type": "string",  "description": "用户名，SQLite 不需要" },
+                      "password": { "type": "string",  "description": "密码，SQLite 不需要" },
+                      "database": { "type": "string",  "description": "数据库名，SQLite 填文件路径" }
+                    }
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "FROM 子句，支持单表名或任意 JOIN 写法（不含 FROM 关键字）",
+                    "example": "user_basic u LEFT JOIN dept d ON u.dept_id = d.id"
+                  },
+                  "select": {
+                    "type": "string",
+                    "description": "SELECT 字段列表（不含 SELECT 关键字），不传默认为 *",
+                    "default": "*",
+                    "example": "u.id, u.name, d.dept_name"
+                  },
+                  "where": {
+                    "type": "string",
+                    "description": "手写 WHERE 条件（不含 WHERE 关键字）。用 {值} 包裹需要转义的值，服务端自动处理引号；不含 {} 的部分原样拼入。例如：u.status = {1} AND u.name LIKE {张}",
+                    "example": "u.status = {1} AND u.name LIKE {张}"
+                  },
+                  "args": {
+                    "type": "array",
+                    "description": "参数化条件数组，与 where 字符串用 AND 合并。每个条件为四元素数组：[字段名, 操作符, 值, 逻辑符]，第一个条件的逻辑符忽略。",
+                    "items": {
+                      "type": "array",
+                      "minItems": 3,
+                      "maxItems": 4,
+                      "prefixItems": [
+                        { "type": "string", "description": "字段名，如 id、u.name、status" },
+                        {
+                          "type": "string",
+                          "description": "操作符",
+                          "enum": ["=", "!=", ">", ">=", "<", "<=", "like", "not like", "in", "not in", "between", "is null", "is not null"]
+                        },
+                        { "description": "值。in/not in 传逗号分隔字符串或数组；between 传 [min,max]；is null/is not null 传 null" },
+                        {
+                          "type": "string",
+                          "description": "逻辑符：and（且）或 or（或），默认 and",
+                          "enum": ["and", "or"]
+                        }
+                      ]
+                    },
+                    "example": [
+                      ["u.deleted_at", "is null", null,    "and"],
+                      ["u.status",     "in",      "1,2,3", "and"],
+                      ["u.age",        ">",       18,      "and"]
+                    ]
+                  },
+                  "groupBy": {
+                    "type": "string",
+                    "description": "GROUP BY 子句（不含 GROUP BY 关键字）",
+                    "example": "d.dept_name, u.status"
+                  },
+                  "having": {
+                    "type": "string",
+                    "description": "HAVING 子句（不含 HAVING 关键字），同样支持 {值} 转义",
+                    "example": "COUNT(*) > {5}"
+                  },
+                  "orderBy": {
+                    "type": "string",
+                    "description": "ORDER BY 子句（不含 ORDER BY 关键字）",
+                    "example": "u.created_at DESC, u.id ASC"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "description": "每页条数，默认 20，最大 5000",
+                    "default": 20,
+                    "minimum": 1,
+                    "maximum": 5000
+                  },
+                  "offset": {
+                    "type": "integer",
+                    "description": "偏移量，用于分页，默认 0",
+                    "default": 0,
+                    "minimum": 0
+                  }
+                }
+              },
+              "examples": {
+                "单表基础查询": {
+                  "value": {
+                    "dbType": "kingbase",
+                    "conn": { "host": "127.0.0.1", "port": 5432, "user": "system", "password": "123456", "database": "mydb" },
+                    "from": "user_basic",
+                    "select": "id, name, status",
+                    "where": "status = {1} AND name LIKE {张}",
+                    "orderBy": "created_at DESC",
+                    "limit": 20,
+                    "offset": 0
+                  }
+                },
+                "JOIN 连表 + args 混用": {
+                  "value": {
+                    "dbType": "kingbase",
+                    "conn": { "host": "127.0.0.1", "port": 5432, "user": "system", "password": "123456", "database": "mydb" },
+                    "from": "user_basic u LEFT JOIN dept d ON u.dept_id = d.id",
+                    "select": "u.id, u.name, d.dept_name, COUNT(o.id) AS order_count",
+                    "where": "u.status = {1}",
+                    "args": [
+                      ["u.deleted_at", "is null", null, "and"]
+                    ],
+                    "groupBy": "u.id, u.name, d.dept_name",
+                    "having": "COUNT(o.id) > {0}",
+                    "orderBy": "u.created_at DESC",
+                    "limit": 20,
+                    "offset": 0
+                  }
+                },
+                "MySQL 分页": {
+                  "value": {
+                    "dbType": "mysql",
+                    "conn": { "host": "127.0.0.1", "port": 3306, "user": "root", "password": "123456", "database": "mydb" },
+                    "from": "order_main",
+                    "args": [
+                      ["amount", ">",       100,   "and"],
+                      ["status", "between", "1,5", "and"]
+                    ],
+                    "orderBy": "id DESC",
+                    "limit": 10,
+                    "offset": 20
+                  }
+                },
+                "SQLite 查日志": {
+                  "value": {
+                    "dbType": "sqlite",
+                    "conn": { "database": "/data/myapp.db" },
+                    "from": "logs",
+                    "where": "level = {error} AND created_at >= {2026-01-01}",
+                    "orderBy": "created_at DESC",
+                    "limit": 100,
+                    "offset": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "from":   { "type": "string",  "description": "查询的 FROM 子句" },
+                        "rows":   { "type": "array",   "description": "数据行列表", "items": { "type": "object" } },
+                        "total":  { "type": "integer", "description": "符合条件的总行数（不含 limit）" },
+                        "count":  { "type": "integer", "description": "本次返回的行数" },
+                        "limit":  { "type": "integer" },
+                        "offset": { "type": "integer" },
+                        "sql":    { "type": "string",  "description": "实际执行的 SQL（调试用）" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "参数错误" },
+          "500": { "description": "数据库连接失败或 SQL 执行出错" }
+        }
+      }
+    }
+  },
+  "components": { "schemas": {} }
+}
