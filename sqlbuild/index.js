@@ -122,6 +122,6 @@ export function processSvnSql(svnUrl, localPath, targetDirPath, outputFileName) 
 
     } catch (err) {
         console.error('💥 流程发生错误:', err.message);
-        process.exit(1);
+        throw err;
     }
 }

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>配置说明</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell doc">
+    <section class="toolbar">
+      <div>
+        <h1>配置说明</h1>
+        <p>首次使用时，exe 会带一个空的 autoBuild/cfg.yaml。请在主界面填写并保存配置。</p>
+      </div>
+      <div class="actions">
+        <a class="button-link" href="./index.html">返回打包界面</a>
+      </div>
+    </section>
+
+    <section class="doc-section">
+      <h2>文件位置</h2>
+      <p>配置文件固定放在 exe 同级目录下：</p>
+      <pre><code>autoBuild/cfg.yaml</code></pre>
+      <p>也可以直接在网页界面里填写，点击“保存配置”后会写入这个文件。</p>
+    </section>
+
+    <section class="doc-section">
+      <h2>发件人配置</h2>
+      <ul>
+        <li><code>name</code>：发件人姓名。</li>
+        <li><code>email</code>：企业邮箱账号，同时用于发送打包邮件。</li>
+        <li><code>psd</code>：企业邮箱授权码或客户端专用密码。</li>
+        <li><code>dpt</code>：部门名称，会显示在邮件签名中。</li>
+        <li><code>cpny</code>：公司名称，会显示在邮件签名中。</li>
+        <li><code>cpnyweb</code>：公司网站。</li>
+        <li><code>tel</code>：联系电话。</li>
+      </ul>
+      <h4>企业邮箱配置</h4>
+      <img style="width: 1200px;"src="./p3.png" alt="">
+      <img style="width: 1200px;" src="./p4.png" alt="">
+      <p><h4>邮箱授权码获取方法</h4></p>
+      <img style="width: 1200px;" src="./p1.png" alt="">
+      <img style="width: 1200px;" src="./p2.png" alt="">
+    </section>
+
+    <section class="doc-section">
+      <h2>Git 配置</h2>
+      <ul>
+        <li><code>name</code>：自动提交本地改动时使用的 Git 用户名。</li>
+        <li><code>email</code>：自动提交本地改动时使用的 Git 邮箱。</li>
+      </ul>
+    </section>
+
+    <section class="doc-section">
+      <h2>项目配置</h2>
+      <ul>
+        <li><code>name</code>：项目中文名，界面下拉框显示这个名称，邮件触发时也会用它匹配项目。</li>
+        <li><code>namee</code>：项目英文标识，保留字段。</li>
+        <li><code>path</code>：前端项目根目录，目录下需要能执行 <code>npm run build</code>。</li>
+        <li><code>sqlpath</code>：本地 SQL/SVN 工作目录。</li>
+        <li><code>sqlSvnUrl</code>：SQL 脚本 SVN 地址。</li>
+        <li><code>emailTarget</code>：收件人邮箱列表，界面里可一行一个，也可用英文逗号分隔。</li>
+      </ul>
+    </section>
+
+    <!-- <section class="doc-section">
+      <h2>示例配置</h2>
+      <pre><code>emailSender:
+  name: 张三
+  email: zhangsan@example.com
+  psd: 邮箱授权码
+  dpt: Web研发部
+  cpny: 示例公司
+  cpnyweb: www.example.com
+  tel: '13800000000'
+git:
+  name: zhangsan
+  email: zhangsan@example.com
+prjs:
+  - name: 示例项目
+    namee: example_web
+    path: D:\projects\example_web
+    sqlpath: D:\projects\db\example
+    sqlSvnUrl: svn://192.168.1.10/project/db/example
+    emailTarget:
+      - user1@example.com
+      - user2@example.com</code></pre>
+    </section> -->
+    <section class="doc-section">
+      <h2>完整配置参考</h2>
+      <img style="width: 1200px;" src="./cfg.png" alt="">
+    </section>
+    <section class="doc-section">
+      <h2>运行要求</h2>
+      <ul>
+        <li>电脑能访问项目 Git 仓库和 SQL SVN 地址。</li>
+        <li>前端项目目录里已安装依赖，或能正常执行 <code>npm install</code> 后再打包。</li>
+        <li>本机命令行能执行 <code>git</code>、<code>svn</code>、<code>npm</code>。</li>
+        <li>企业邮箱授权码正确，且 SMTP/IMAP 服务可访问。</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

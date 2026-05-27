@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zbcx-web应用自动打包</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="toolbar">
+      <div>
+        <h1>zbcx-web应用自动打包</h1>
+        <p id="configPath">正在读取配置...</p>
+      </div>
+      <div class="actions">
+        <a class="button-link" href="./config-doc.html" target="_blank" rel="noopener">配置说明</a>
+        <button id="reloadBtn" type="button">重新读取</button>
+        <button id="saveBtn" type="button">保存配置</button>
+      </div>
+    </section>
+
+    <section class="grid">
+      <form id="buildForm" class="panel">
+        <h2>打包任务</h2>
+        <label>
+          项目
+          <select id="projectSelect" required></select>
+        </label>
+        <fieldset class="mode-field">
+          <legend>打包类型</legend>
+          <label class="radio-line">
+            <input type="radio" name="buildType" value="patch" checked>
+            补丁包
+          </label>
+          <label class="radio-line">
+            <input type="radio" name="buildType" value="full">
+            全量包
+          </label>
+          <legend style="color: rgb(255, 65, 65); font-size: 12px;">
+            （注：当包的大小超过45MB时，会触发企业邮箱保护机制，无法自动发送邮件，需要在企业邮箱手动选择超大附件发送邮件！）
+          </legend>
+        </fieldset>
+        <label id="dateRow">
+          起始日期
+          <input id="buildDate" type="date" required>
+        </label>
+        <div class="summary" id="projectSummary"></div>
+        <button id="buildBtn" class="primary" type="submit">开始打包</button>
+      </form>
+
+      <details class="panel collapsible">
+        <summary>发件人配置</summary>
+        <div class="form-grid">
+          <label>姓名<input data-email-field="name"></label>
+          <label>邮箱<input data-email-field="email"></label>
+          <label>邮箱授权码<input data-email-field="psd" type="password"></label>
+          <label>部门<input data-email-field="dpt"></label>
+          <label>公司<input data-email-field="cpny"></label>
+          <label>公司网站<input data-email-field="cpnyweb"></label>
+          <label>电话<input data-email-field="tel"></label>
+        </div>
+      </details>
+
+      <section class="panel">
+        <div class="panel-title">
+          <h2>打包记录</h2>
+          <button id="refreshHistoryBtn" type="button">刷新</button>
+        </div>
+        <div id="historyList" class="history-list"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Git 配置</h2>
+        <div class="form-grid">
+          <label>用户名<input data-git-field="name"></label>
+          <label>邮箱<input data-git-field="email"></label>
+        </div>
+      </section>
+
+      <section class="panel wide">
+        <div class="panel-title">
+          <h2>项目配置</h2>
+          <button id="addProjectBtn" type="button">新增项目</button>
+        </div>
+        <div id="projectEditor" class="project-editor"></div>
+      </section>
+    </section>
+
+    <div id="toast" class="toast" hidden></div>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

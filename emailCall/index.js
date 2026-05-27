@@ -1,19 +1,12 @@
 import Imap from 'imap';
 import { simpleParser } from 'mailparser';
-import yaml from 'js-yaml';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
-import path from 'path';
 import autoBuild from '../autoBuild/index.js'
+import { loadBuildConfig } from '../autoBuild/config.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 // 1. 读取配置文件内容
-const configPath = path.join(__dirname, '../autoBuild/cfg.yaml');
-const fileContent = fs.readFileSync(configPath, 'utf8');
 
 // 2. 解析 YAML 字符串为 JS 对象
-const buildconfig = yaml.load(fileContent);
+const buildconfig = loadBuildConfig();
 // 3. 打印配置信息
 // console.log(buildconfig);
 

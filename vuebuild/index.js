@@ -22,17 +22,22 @@ const execPromise = promisify(exec);
  * @param {string} options.prjName    - 项目名称
  * @returns {Promise<{ zipPath: string, logPath: string }>}
  */
-export async function runBuildWorkflow({ gitName, projectPath, date, email, prjName }) {
+export async function runBuildWorkflow({ gitName, projectPath, date, email, prjName, buildType = 'patch' }) {
   projectPath = path.resolve(projectPath);
-  const inputDate = dayjs(date).startOf('day');
+  const isFullBuild = buildType === 'full';
+  const inputDate = isFullBuild ? null : dayjs(date).startOf('day');
 
   const distPath = path.join(projectPath, 'dist');
-  const logFileName = `${date}-今日研发更新日志.txt`;
+  const logDate = isFullBuild ? dayjs().format('YYYY-MM-DD') : date;
+  const logFileName = `${logDate}-${isFullBuild ? '全量包' : '今日研发更新日志'}.txt`;
   const logFilePath = path.join(distPath, logFileName);
 
   console.log(chalk.cyan(`🚀 开始工作流...`));
   console.log(`📂 项目路径: ${projectPath}`);
-  console.log(`📅 过滤时间: ${date}`);
+  console.log(`📦 打包类型: ${isFullBuild ? '全量包' : '补丁包'}`);
+  if (!isFullBuild) {
+    console.log(`📅 过滤时间: ${date}`);
+  }
 
   if (!await fs.pathExists(projectPath)) {
     throw new Error(`路径不存在 - ${projectPath}`);
@@ -72,10 +77,14 @@ export async function runBuildWorkflow({ gitName, projectPath, date, email, prjN
   await git.raw(['config', 'core.quotePath', 'false']);
 
   const allLogs = await git.log();
-  const filteredLogs = allLogs.all.filter(log => dayjs(log.date).isAfter(inputDate));
+  const filteredLogs = isFullBuild
+    ? allLogs.all
+    : allLogs.all.filter(log => dayjs(log.date).isAfter(inputDate));
 
   const keepPaths = new Set();
-  let fullLogContent = `Git 变更日志 (自 ${date} 起)\n========================================\n`;
+  let fullLogContent = isFullBuild
+    ? `Git 变更日志 (全量包)\n========================================\n`
+    : `Git 变更日志 (自 ${date} 起)\n========================================\n`;
 
   if (filteredLogs.length === 0) {
     fullLogContent += '无相关更新记录\n';
@@ -128,14 +137,17 @@ export async function runBuildWorkflow({ gitName, projectPath, date, email, prjN
   console.log(chalk.green(`✅ 日志已写入: ${logFilePath}`));
 
   // 7. 清理 dist/app/static
-  console.log(chalk.yellow('6️⃣ 正在根据白名单清理 static 目录...'));
   const targetDir = path.join(distPath, 'app', 'static');
-
-  if (!await fs.pathExists(targetDir)) {
-    console.warn(chalk.yellow('⚠️ static 目录不存在，跳过清理步骤'));
+  if (isFullBuild) {
+    console.log(chalk.yellow('6️⃣ 全量包跳过 static 白名单清理...'));
   } else {
-    console.log(chalk.gray('   [调试] 白名单内容:'));
-    keepPaths.forEach(p => console.log(chalk.gray(`   - ${p}`)));
+    console.log(chalk.yellow('6️⃣ 正在根据白名单清理 static 目录...'));
+
+    if (!await fs.pathExists(targetDir)) {
+      console.warn(chalk.yellow('⚠️ static 目录不存在，跳过清理步骤'));
+    } else {
+      console.log(chalk.gray('   [调试] 白名单内容:'));
+      keepPaths.forEach(p => console.log(chalk.gray(`   - ${p}`)));
 
     const getAllFiles = async (dir, fileList = []) => {
       if (!await fs.pathExists(dir)) return fileList;
@@ -180,8 +192,9 @@ export async function runBuildWorkflow({ gitName, projectPath, date, email, prjN
       }
     };
 
-    await removeEmptyDirs(targetDir);
-    console.log(chalk.green(`✅ 清理完成 (保留: ${keptCount}, 删除: ${deletedCount})`));
+      await removeEmptyDirs(targetDir);
+      console.log(chalk.green(`✅ 清理完成 (保留: ${keptCount}, 删除: ${deletedCount})`));
+    }
   }
 
   // 8. 创建日期文件夹并整理文件
@@ -190,7 +203,7 @@ export async function runBuildWorkflow({ gitName, projectPath, date, email, prjN
   curDateTime = curDateTime.replace(/\s+/g, '-');
   // 把 ':' 替换成 '-'
   curDateTime = curDateTime.replace(':', '-');
-  const folderName = `ZBCX-${curDateTime}-${prjName}项目补丁包`
+  const folderName = `ZBCX-${curDateTime}-${prjName}项目${isFullBuild ? '全量包' : '补丁包'}`
   const finalFolderPath = path.join(distPath, folderName);
   console.log(chalk.yellow(`7️⃣ 正在整理文件到目录: ${folderName}...`));
 
@@ -211,17 +224,19 @@ export async function runBuildWorkflow({ gitName, projectPath, date, email, prjN
     console.error(chalk.red('数据库脚本不存在'));
   }
 
-  // 判断finalFolderPath/app/文件夹下有没有除了assets和static以外的文件夹，有的话删除文件夹，文件不删
-  const appDir = path.join(finalFolderPath, 'app');
-  const excludedFolders = new Set(['assets', 'static']);
+  if (!isFullBuild) {
+    // 判断finalFolderPath/app/文件夹下有没有除了assets和static以外的文件夹，有的话删除文件夹，文件不删
+    const appDir = path.join(finalFolderPath, 'app');
+    const excludedFolders = new Set(['assets', 'static']);
 
-  fs.readdirSync(appDir).forEach((entry) => {
-    const fullPath = path.join(appDir, entry);
-    if (fs.lstatSync(fullPath).isDirectory() && !excludedFolders.has(entry)) {
-      fs.rmSync(fullPath, { recursive: true, force: true }); // Node 16.7+
-      console.log(`已删除文件夹: ${fullPath}`);
-    }
-  });
+    fs.readdirSync(appDir).forEach((entry) => {
+      const fullPath = path.join(appDir, entry);
+      if (fs.lstatSync(fullPath).isDirectory() && !excludedFolders.has(entry)) {
+        fs.rmSync(fullPath, { recursive: true, force: true }); // Node 16.7+
+        console.log(`已删除文件夹: ${fullPath}`);
+      }
+    });
+  }
 
 
   // 9. 压缩
@@ -247,7 +262,7 @@ export async function runBuildWorkflow({ gitName, projectPath, date, email, prjN
 
 
 // ---- CLI 入口（仅直接运行时生效）----
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+if (!process.pkg && process.argv[1] === new URL(import.meta.url).pathname) {
   program
     .requiredOption('-p, --path <path>', 'Vue 项目的绝对路径')
     .requiredOption('-d, --date <date>', '时间参数 (格式: YYYY-MM-DD)')

@@ -7,12 +7,29 @@
     "vue-flow": "./vuebuild/index.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "manual-build": "node manualBuild/server.js",
+    "build:manual-exe": "npx --yes esbuild manualBuild/server.js --bundle --platform=node --format=cjs --outfile=dist/zbcx-web-pack.bundle.cjs && npx --yes @yao-pkg/pkg dist/zbcx-web-pack.bundle.cjs --targets node20-win-x64 --output dist/zbcx-web-pack.exe",
+    "test": "node --check emailCall/index.js && node --check autoBuild/index.js && node --check vuebuild/index.js && node --check manualBuild/server.js && node --check manualBuild/public/app.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
+  "pkg": {
+    "assets": [
+      "manualBuild/public/**/*",
+      "autoBuild/cfg.yaml"
+    ],
+    "scripts": [
+      "manualBuild/server.js",
+      "autoBuild/index.js",
+      "autoBuild/config.js",
+      "autoBuild/history.js",
+      "sqlbuild/index.js",
+      "vuebuild/index.js",
+      "sendEmail/index.js"
+    ]
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "archiver": "^7.0.1",
@@ -41,5 +58,8 @@
     "xlsx": "^0.18.5",
     "xml2js": "^0.6.2",
     "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "rcedit": "^5.0.1"
   }
 }
