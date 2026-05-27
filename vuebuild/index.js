@@ -11,6 +11,104 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execPromise = promisify(exec);
+const DEFAULT_BRANCH = 'main';
+
+function normalizeBranch(branch) {
+  return String(branch || '').trim() || DEFAULT_BRANCH;
+}
+
+function normalizePath(repoPath) {
+  return path.resolve(String(repoPath || '').trim());
+}
+
+function normalizeExtraRepos(repos) {
+  if (!Array.isArray(repos)) return [];
+
+  return repos
+    .map((repo) => ({
+      path: String(repo?.path || '').trim(),
+      gitUrl: String(repo?.gitUrl || repo?.url || '').trim(),
+      branch: normalizeBranch(repo?.branch),
+    }))
+    .filter((repo) => repo.path);
+}
+
+async function checkoutBranch(git, branch) {
+  const localBranches = await git.branchLocal();
+  if (localBranches.all.includes(branch)) {
+    await git.checkout(branch);
+    return;
+  }
+
+  try {
+    await git.checkout(['-b', branch, `origin/${branch}`]);
+  } catch (error) {
+    throw new Error(`checkout branch ${branch} failed: ${error.message}`);
+  }
+}
+
+async function ensureRepoReady(repoConfig) {
+  const repoPath = normalizePath(repoConfig.path);
+  const branch = normalizeBranch(repoConfig.branch);
+  const gitUrl = String(repoConfig.gitUrl || '').trim();
+
+  if (!await fs.pathExists(repoPath)) {
+    if (!gitUrl) {
+      throw new Error(`Git path not found and gitUrl is empty: ${repoPath}`);
+    }
+
+    await fs.ensureDir(path.dirname(repoPath));
+    console.log(chalk.yellow(`   cloning ${gitUrl} -> ${repoPath} (${branch})`));
+    await simpleGit().clone(gitUrl, repoPath, ['--branch', branch, '--single-branch']);
+  }
+
+  if (!await fs.pathExists(path.join(repoPath, '.git'))) {
+    throw new Error(`Path is not a Git repository: ${repoPath}`);
+  }
+
+  const git = simpleGit(repoPath);
+  if (gitUrl) {
+    const remotes = await git.getRemotes(true);
+    const origin = remotes.find((remote) => remote.name === 'origin');
+    if (!origin) {
+      await git.addRemote('origin', gitUrl);
+    } else if (origin.refs?.fetch && origin.refs.fetch !== gitUrl) {
+      await git.remote(['set-url', 'origin', gitUrl]);
+    }
+  }
+
+  return { git, repoPath, branch };
+}
+
+async function syncGitRepo({ repoPath, gitUrl, branch, gitName, email, label }) {
+  const repo = await ensureRepoReady({ path: repoPath, gitUrl, branch });
+  const git = repo.git;
+  const targetBranch = repo.branch;
+
+  console.log(chalk.yellow(`   ${label || repo.repoPath}: checkout ${targetBranch}`));
+  await git.fetch(['origin', targetBranch]).catch(() => git.fetch());
+  await checkoutBranch(git, targetBranch);
+
+  const userName = String(gitName || '').trim();
+  const userEmail = String(email || '').trim();
+  if (userName) {
+    await git.raw(['config', 'user.name', userName]);
+  }
+  if (userEmail) {
+    await git.raw(['config', 'user.email', userEmail]);
+  }
+
+  const status = await git.status();
+  if (!status.isClean()) {
+    await git.add('.');
+    await git.commit('Auto commit: save local changes before workflow');
+  }
+
+  await git.raw(['pull', '--no-edit', 'origin', targetBranch]);
+  await git.raw(['push', '--set-upstream', 'origin', targetBranch]);
+
+  return { git, repoPath: repo.repoPath, branch: targetBranch };
+}
 
 /**
  * Vue 项目自动化构建工作流
@@ -22,8 +120,10 @@ const execPromise = promisify(exec);
  * @param {string} options.prjName    - 项目名称
  * @returns {Promise<{ zipPath: string, logPath: string }>}
  */
-export async function runBuildWorkflow({ gitName, projectPath, date, email, prjName, buildType = 'patch' }) {
+export async function runBuildWorkflow({ gitName, projectPath, date, email, prjName, buildType = 'patch', branch = DEFAULT_BRANCH, workspaces = [] }) {
   projectPath = path.resolve(projectPath);
+  branch = normalizeBranch(branch);
+  workspaces = normalizeExtraRepos(workspaces);
   const isFullBuild = buildType === 'full';
   const inputDate = isFullBuild ? null : dayjs(date).startOf('day');
 
@@ -47,8 +147,9 @@ export async function runBuildWorkflow({ gitName, projectPath, date, email, prjN
 
   // 1. 切换分支
   try {
-    await git.checkout('main');
-    console.log('✅ 已切换到 main 分支');
+    await git.fetch(['origin', branch]).catch(() => git.fetch());
+    await checkoutBranch(git, branch);
+    console.log(`✅ 已切换到 ${branch} 分支`);
   } catch (e) {
     throw new Error(`切换分支失败: ${e.message}`);
   }
@@ -65,11 +166,22 @@ export async function runBuildWorkflow({ gitName, projectPath, date, email, prjN
 
   // 3. 拉取远程代码
   console.log(chalk.yellow('2️⃣ 正在拉取远程代码...'));
-  await git.pull(['--no-edit']);
+  await git.raw(['pull', '--no-edit', 'origin', branch]);
   console.log(chalk.green('✅ 远程代码已拉取'));
 
   // 4.推送远端代码
-  await git.push(['--set-upstream', 'origin','main']);
+  await git.push(['--set-upstream', 'origin', branch]);
+  for (const workspace of workspaces) {
+    await syncGitRepo({
+      repoPath: workspace.path,
+      gitUrl: workspace.gitUrl,
+      branch: workspace.branch,
+      gitName,
+      email,
+      label: workspace.path,
+    });
+    console.log(chalk.green(`✅ 工作目录已同步: ${workspace.path} (${workspace.branch})`));
+  }
   console.log(chalk.green('✅ 本地代码已提交'));
 
   // 5.收集日志并分析文件

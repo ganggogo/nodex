@@ -13,24 +13,29 @@ prjs:
   - name: 厦门地下空间
     namee: js_ddy_dzsjgljzhfxxt
     path: E:\2025Prjs\项目文件\厦门地下空间\工程\js_ddy_dzsjgljzhfxxt\26_js_ddy_dzsjglfx_web
+    branch: main
     sqlpath: E:\2023Prjs\db\20260108-厦门地下空间\02研发脚本\
     sqlSvnUrl: svn://192.168.2.219/project/prj_db/20260108-%E5%8E%A6%E9%97%A8%E5%9C%B0%E4%B8%8B%E7%A9%BA%E9%97%B4/02%E7%A0%94%E5%8F%91%E8%84%9A%E6%9C%AC
     emailTarget:
       - xugang@whzbcx.com
       - sunyr@whzbcx.com
       - wanghaichang@whzbcx.com
+    workspaces: []
   - name: 江苏大数据服务平台(汇交平台)
     namee: js_dz_dsjfwzx_web
     path: E:\2023Prjs\江苏省大数据平台\项目工程\js_dz_dsjfwzx_web
+    branch: main
     sqlpath: E:\2023Prjs\db\202406-江苏地质大数据服务\02-Upgrade\
     sqlSvnUrl: svn://192.168.2.219/project/prj_db/202406-%E6%B1%9F%E8%8B%8F%E5%9C%B0%E8%B4%A8%E5%A4%A7%E6%95%B0%E6%8D%AE%E6%9C%8D%E5%8A%A1/02-Upgrade
     emailTarget:
       - xugang@whzbcx.com
       - chenruoyu@whzbcx.com
       - sunyr@whzbcx.com
+    workspaces: []
   - name: 四川岩土二期
     namee: sc_zjyt_gcdsjpt_web
     path: E:\2025Prjs\项目文件\四川二期\工程\sc_zjyt_gcdsjpt_web
+    branch: main
     sqlpath: E:\2023Prjs\db\20260113-四川岩土工程二期\02研发脚本\
     sqlSvnUrl: svn://192.168.2.219/project/prj_db/20260113-%E5%9B%9B%E5%B7%9D%E5%B2%A9%E5%9C%9F%E5%B7%A5%E7%A8%8B%E4%BA%8C%E6%9C%9F/02%E7%A0%94%E5%8F%91%E8%84%9A%E6%9C%AC
     emailTarget:
@@ -38,9 +43,11 @@ prjs:
       - shitingting@whzbcx.com
       - zhongwentao@whzbcx.com
       - xiwanxin@whzbcx.com
+    workspaces: []
   - name: 江苏地上地下
     namee: js_ddy_zyxtlyjk_web
     path: E:\2023Prjs\江苏地上地下协同资源项目\js_ddy_zyxtlyjk_web
+    branch: main
     sqlpath: E:\2025Prjs\项目文件\项目脚本\svn环境\20240829-江苏地调院信息化建设\地上地下系统\
     sqlSvnUrl: svn://192.168.2.219/project/prj_db/20240829-%E6%B1%9F%E8%8B%8F%E5%9C%B0%E8%B0%83%E9%99%A2%E4%BF%A1%E6%81%AF%E5%8C%96%E5%BB%BA%E8%AE%BE/%E5%9C%B0%E4%B8%8A%E5%9C%B0%E4%B8%8B%E7%B3%BB%E7%BB%9F
     emailTarget:
@@ -48,3 +55,4 @@ prjs:
       - liutengzhu@whzbcx.com
       - tangrensi@whzbcx.com
       - liuzhiqiang@whzbcx.com
+    workspaces: []

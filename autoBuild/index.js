@@ -26,16 +26,21 @@ export default async function autoBuild(config, prj, date, options = {}) {
   // 把projectPath中的反斜杠转为正斜杠
   projectPath = projectPath.replace(/\\/g, '/');
   let prjName = prj.name
+  let branch = prj.branch || 'main'
+  let workspaces = Array.isArray(prj.workspaces) ? prj.workspaces : []
 
   // 1.拉取脚本
   let svnUrl = prj.sqlSvnUrl
   let localPath = prj.sqlpath
   let targetDirPath = projectPath + '/dist/'
   let gitName = config.git.name
-  processSvnSql(svnUrl, localPath, targetDirPath, `${prjName}.sql`)
+  processSvnSql(svnUrl, localPath, targetDirPath, `${prjName}.sql`, {
+    sourceFileName: prj.sqlFileName,
+    date,
+  })
 
   // 2.执行打包
-  let buildRes = await runBuildWorkflow({gitName, projectPath, date, email, prjName, buildType: options.buildType || 'patch'})
+  let buildRes = await runBuildWorkflow({gitName, projectPath, date, email, prjName, branch, workspaces, buildType: options.buildType || 'patch'})
   let { zipPath, zipName, logPath: destLogPath } = buildRes;
 
   // 3.发送邮件

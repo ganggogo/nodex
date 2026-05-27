@@ -58,7 +58,11 @@
         <li><code>name</code>：项目中文名，界面下拉框显示这个名称，邮件触发时也会用它匹配项目。</li>
         <li><code>namee</code>：项目英文标识，保留字段。</li>
         <li><code>path</code>：前端项目根目录，目录下需要能执行 <code>npm run build</code>。</li>
+        <li><code>branch</code>：前端项目根目录使用的 Git 分支名；不填时默认 <code>main</code>。</li>
+        <li><code>workspaces</code>：附加工作目录列表，每项可配置 <code>path</code>、<code>gitUrl</code>、<code>branch</code>。打包时会自动拉取、提交并推送这些目录。</li>
         <li><code>sqlpath</code>：本地 SQL/SVN 工作目录。</li>
+        <li><code>sqlFileName</code>：要抓取的 SQL 文件名；不填时默认抓取 <code>sqlpath</code> 下第一个文件名包含 <code>update</code> 的 <code>.sql</code> 文件。</li>
+        <li>目标 SQL 文件没有打包标记时，会按页面选择的起始日期，从 SVN 中提取该日期之后提交的 SQL 新增内容。</li>
         <li><code>sqlSvnUrl</code>：SQL 脚本 SVN 地址。</li>
         <li><code>emailTarget</code>：收件人邮箱列表，界面里可一行一个，也可用英文逗号分隔。</li>
       </ul>
@@ -81,7 +85,13 @@ prjs:
   - name: 示例项目
     namee: example_web
     path: D:\projects\example_web
+    branch: develop
+    workspaces:
+      - path: D:\projects\example_api
+        gitUrl: http://git.example.com/example_api.git
+        branch: release
     sqlpath: D:\projects\db\example
+    sqlFileName: update.sql
     sqlSvnUrl: svn://192.168.1.10/project/db/example
     emailTarget:
       - user1@example.com
@@ -90,6 +100,8 @@ prjs:
     <section class="doc-section">
       <h2>完整配置参考</h2>
       <img style="width: 1200px;" src="./cfg.png" alt="">
+      <h2>打包过程实例</h2>
+      <img style="width: 1200px;" src="./packtest.png" alt="">
     </section>
     <section class="doc-section">
       <h2>运行要求</h2>

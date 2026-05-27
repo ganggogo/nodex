@@ -72,13 +72,20 @@ function getCurrentConfig() {
         project[key] = input.value.trim();
       }
     });
+    project.workspaces = [...row.querySelectorAll('.workspace-row')].map((workspaceRow) => {
+      const workspace = {};
+      workspaceRow.querySelectorAll('[data-workspace-field]').forEach((input) => {
+        workspace[input.dataset.workspaceField] = input.value.trim();
+      });
+      return workspace;
+    }).filter((workspace) => workspace.path || workspace.gitUrl);
     return project;
   });
 
   return config;
 }
 
-function renderProjectSelect() {
+function renderProjectSelect(selectedProjectName = projectSelect.value) {
   projectSelect.innerHTML = '';
   state.config.prjs.forEach((project) => {
     const option = document.createElement('option');
@@ -86,6 +93,9 @@ function renderProjectSelect() {
     option.textContent = project.name || '(未命名项目)';
     projectSelect.appendChild(option);
   });
+  if (selectedProjectName && [...projectSelect.options].some((option) => option.value === selectedProjectName)) {
+    projectSelect.value = selectedProjectName;
+  }
   renderProjectSummary();
   renderHistory();
 }
@@ -100,6 +110,8 @@ function renderProjectSummary() {
   projectSummary.innerHTML = [
     `<strong>英文名:</strong> ${project.namee || '-'}`,
     `<strong>项目路径:</strong> ${project.path || '-'}`,
+    `<strong>Git 分支:</strong> ${project.branch || 'main'}`,
+    `<strong>工作目录:</strong> ${(project.workspaces || []).length}`,
     `<strong>SQL 路径:</strong> ${project.sqlpath || '-'}`,
     `<strong>收件人:</strong> ${(project.emailTarget || []).join(', ') || '-'}`,
   ].join('<br>');
@@ -160,6 +172,43 @@ function field(label, key, value, tag = 'input') {
   return wrapper;
 }
 
+function fieldWithHint(label, key, value, hint, tag = 'input') {
+  const wrapper = field(label, key, value, tag);
+  const hintEl = document.createElement('span');
+  hintEl.className = 'field-hint';
+  hintEl.textContent = hint;
+  wrapper.appendChild(hintEl);
+  return wrapper;
+}
+
+function workspaceField(label, key, value) {
+  const wrapper = document.createElement('label');
+  wrapper.textContent = label;
+  const input = document.createElement('input');
+  input.dataset.workspaceField = key;
+  input.value = value || '';
+  wrapper.appendChild(input);
+  return wrapper;
+}
+
+function createWorkspaceRow(workspace = {}) {
+  const row = document.createElement('div');
+  row.className = 'workspace-row';
+  row.append(
+    workspaceField('工作路径', 'path', workspace.path),
+    workspaceField('Git 地址', 'gitUrl', workspace.gitUrl),
+    workspaceField('分支名', 'branch', workspace.branch || 'main'),
+  );
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'danger';
+  removeBtn.textContent = '删除工作目录';
+  removeBtn.addEventListener('click', () => row.remove());
+  row.appendChild(removeBtn);
+  return row;
+}
+
 function renderProjectEditor() {
   projectEditor.innerHTML = '';
 
@@ -195,12 +244,35 @@ function renderProjectEditor() {
       field('项目名称', 'name', project.name),
       field('项目标识', 'namee', project.namee),
       field('项目路径', 'path', project.path),
+      field('Git 分支名', 'branch', project.branch || 'main'),
       field('SQL 本地路径', 'sqlpath', project.sqlpath),
+      fieldWithHint('SQL 文件名', 'sqlFileName', project.sqlFileName, '若不配置，则默认抓取文件路径下第一个文件名包含 update 的 sql 文件。'),
       field('SQL SVN 地址', 'sqlSvnUrl', project.sqlSvnUrl),
       field('收件人，每行一个或逗号分隔', 'emailTarget', project.emailTarget, 'textarea'),
     );
-    fields.children[4].classList.add('full');
-    fields.children[5].classList.add('full');
+    fields.children[6].classList.add('full');
+    fields.children[7].classList.add('full');
+
+    const workspaceBox = document.createElement('section');
+    workspaceBox.className = 'workspace-box full';
+    const workspaceTitle = document.createElement('div');
+    workspaceTitle.className = 'workspace-title';
+    const workspaceHeading = document.createElement('h3');
+    workspaceHeading.textContent = '附加工作目录';
+    const addWorkspaceBtn = document.createElement('button');
+    addWorkspaceBtn.type = 'button';
+    addWorkspaceBtn.textContent = '新增工作目录';
+    const workspaceList = document.createElement('div');
+    workspaceList.className = 'workspace-list';
+    (Array.isArray(project.workspaces) ? project.workspaces : []).forEach((workspace) => {
+      workspaceList.appendChild(createWorkspaceRow(workspace));
+    });
+    addWorkspaceBtn.addEventListener('click', () => {
+      workspaceList.appendChild(createWorkspaceRow({ branch: 'main' }));
+    });
+    workspaceTitle.append(workspaceHeading, addWorkspaceBtn);
+    workspaceBox.append(workspaceTitle, workspaceList);
+    fields.appendChild(workspaceBox);
 
     row.append(summary, fields);
     projectEditor.appendChild(row);
@@ -228,7 +300,7 @@ async function loadConfig() {
   await loadHistory();
 }
 
-async function saveConfig() {
+async function saveConfig(selectedProjectName = projectSelect.value) {
   state.config = getCurrentConfig();
   const data = await requestJson('/api/config', {
     method: 'PUT',
@@ -236,7 +308,7 @@ async function saveConfig() {
   });
   state = data;
   configPathEl.textContent = `配置文件: ${data.configPath}`;
-  renderProjectSelect();
+  renderProjectSelect(selectedProjectName);
   renderProjectEditor();
   showToast('配置已保存。');
 }
@@ -264,7 +336,10 @@ document.getElementById('addProjectBtn').addEventListener('click', () => {
     name: '',
     namee: '',
     path: '',
+    branch: 'main',
+    workspaces: [],
     sqlpath: '',
+    sqlFileName: '',
     sqlSvnUrl: '',
     emailTarget: [],
   });
@@ -292,14 +367,15 @@ projectSelect.addEventListener('change', () => {
 
 document.getElementById('buildForm').addEventListener('submit', async (event) => {
   event.preventDefault();
+  const selectedProjectName = projectSelect.value;
   buildBtn.disabled = true;
   buildBtn.textContent = '打包中...';
 
   try {
-    await saveConfig();
+    await saveConfig(selectedProjectName);
     const buildType = currentBuildType();
     const body = {
-      projectName: projectSelect.value,
+      projectName: selectedProjectName,
       buildType,
     };
     if (buildType === 'patch') {

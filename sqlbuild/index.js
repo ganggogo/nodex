@@ -21,6 +21,28 @@ function runCommand(command, workingDir) {
     }
 }
 
+export function extractAddedContentFromSvnDiff(diffText) {
+    return diffText
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+        .map((line) => line.substring(1))
+        .join('\n');
+}
+
+function extractContentAfterSvnDate(localPath, matchedFile, date) {
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        throw new Error('首次使用程序打包且 SQL 文件无打包标记时，需要提供页面选择的起始日期。');
+    }
+
+    const diffText = runCommand(`svn diff -r {${date}}:HEAD "${matchedFile}"`, localPath);
+    const extractedContent = extractAddedContentFromSvnDiff(diffText);
+    if (!extractedContent.trim()) {
+        throw new Error(`SQL 文件 ${matchedFile} 在 ${date} 之后没有 SVN 新增内容。`);
+    }
+
+    return extractedContent;
+}
+
 /**
  * 核心处理函数
  * @param {string} svnUrl - SVN 仓库地址
@@ -28,7 +50,7 @@ function runCommand(command, workingDir) {
  * @param {string} targetDirPath - 目标文件夹的绝对路径
  * @param {string} outputFileName - 想要生成的文件名
  */
-export function processSvnSql(svnUrl, localPath, targetDirPath, outputFileName) {
+export function processSvnSql(svnUrl, localPath, targetDirPath, outputFileName, options = {}) {
     // 1. 校验本地路径
     if (!fs.existsSync(localPath)) {
         throw new Error(`❌ 本地路径不存在: ${localPath}`);
@@ -49,10 +71,15 @@ export function processSvnSql(svnUrl, localPath, targetDirPath, outputFileName) 
 
         // 3. 查找目标文件
         const files = fs.readdirSync(localPath);
-        const matchedFile = files.find(file => file.includes('update') && path.extname(file) === '.sql');
+        const configuredFileName = String(options.sourceFileName || '').trim();
+        const matchedFile = configuredFileName
+            ? files.find(file => file === configuredFileName)
+            : files.find(file => file.toLowerCase().includes('update') && path.extname(file).toLowerCase() === '.sql');
 
         if (!matchedFile) {
-            throw new Error(`❌ 在路径 ${localPath} 下未找到包含 'update' 的 SQL 文件。`);
+            throw new Error(configuredFileName
+                ? `❌ 在路径 ${localPath} 下未找到指定 SQL 文件: ${configuredFileName}`
+                : `❌ 在路径 ${localPath} 下未找到包含 'update' 的 SQL 文件。`);
         }
 
         const oldFilePath = path.join(localPath, matchedFile);
@@ -63,18 +90,14 @@ export function processSvnSql(svnUrl, localPath, targetDirPath, outputFileName) 
         const separator = '******------';
         const separatorIndex = content.lastIndexOf(separator);
 
+        let extractedContent = '';
         if (separatorIndex === -1) {
-            throw new Error(`❌ 在文件 ${matchedFile} 中未找到分隔符 '${separator}'`);
+            console.log(`⚠️ 文件 ${matchedFile} 中未找到分隔符 '${separator}'，按页面选择的起始日期 ${options.date || '-'} 提取 SVN 提交后的 SQL 新增内容。`);
+            extractedContent = extractContentAfterSvnDate(localPath, matchedFile, options.date);
+        } else {
+            const startIndex = separatorIndex + separator.length;
+            extractedContent = content.substring(startIndex);
         }
-
-        // ================= 修改点：截取逻辑 =================
-        
-        // 计算截取起始位置：分隔符的索引 + 分隔符的长度
-        // 这样就能从分隔符的下一位开始截取，从而不包含分隔符本身
-        const startIndex = separatorIndex + separator.length;
-        
-        // 截取从 startIndex 直到字符串末尾的内容
-        const extractedContent = content.substring(startIndex);
 
         // =================================================
 
