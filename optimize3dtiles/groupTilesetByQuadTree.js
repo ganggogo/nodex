@@ -46,6 +46,11 @@ Options:
   --merge-groups           Merge each spatial group into a new b3dm. This can
                            reduce tile/content count but may break analysis
                            tools that assume original b3dm granularity.
+  --max-merged-bytes <n>   Maximum estimated source bytes in one merged b3dm
+                           when --merge-groups is used. Supports kb/mb.
+                           Default: 12mb
+  --max-merged-span <n>    Maximum XY bounding span in one merged b3dm when
+                           --merge-groups is used. Default: unlimited
   --no-merge-primitives    Copy b3dm files without merging GLB primitives.
   --no-copy-content        Do not copy b3dm files. Keep original content uri
                            references. Only safe when output stays beside input.
@@ -80,6 +85,8 @@ async function main() {
     copyContent: !args.includes("--no-copy-content"),
     mergePrimitives: !args.includes("--no-merge-primitives"),
     mergeGroups: args.includes("--merge-groups"),
+    maxMergedBytes: readSizeOption(args, "--max-merged-bytes", 12 * 1024 * 1024),
+    maxMergedSpan: readOptionalNumberOption(args, "--max-merged-span"),
   };
 
   validateOptions(options);
@@ -106,7 +113,11 @@ async function main() {
   }
 
   const rawGroups = splitByQuadTree(groupable, options.targetGroupSize);
-  const groups = mergeSmallGroups(rawGroups, options.minGroupSize, options.maxGroupSize);
+  let groups = mergeSmallGroups(rawGroups, options.minGroupSize, options.maxGroupSize);
+  if (options.copyContent && options.mergeGroups) {
+    await attachSourceStats(groups.flat(), inputDir);
+    groups = constrainMergeGroups(groups, options);
+  }
   const outputModelName = path.basename(outputTileset, path.extname(outputTileset));
   const contentCopy = options.copyContent && options.mergeGroups
     ? await writeMergedGroupContents(groups, inputDir, outputDir, outputModelName, options)
@@ -166,6 +177,18 @@ function readOptionalNumberOption(args, name) {
   return value === undefined ? undefined : Number(value);
 }
 
+function readSizeOption(args, name, fallback) {
+  const raw = readStringOption(args, name);
+  if (!raw) return fallback;
+  const match = String(raw).trim().toLowerCase().match(/^(\d+(?:\.\d+)?)(b|kb|k|mb|m)?$/);
+  if (!match) throw new Error(`Invalid size for ${name}: ${raw}`);
+  const value = Number(match[1]);
+  const unit = match[2] ?? "b";
+  if (unit === "mb" || unit === "m") return Math.floor(value * 1024 * 1024);
+  if (unit === "kb" || unit === "k") return Math.floor(value * 1024);
+  return Math.floor(value);
+}
+
 function readStringOption(args, name, fallback = undefined) {
   const equal = args.find((arg) => arg.startsWith(`${name}=`));
   if (equal) return equal.slice(name.length + 1);
@@ -197,6 +220,12 @@ function validateOptions(options) {
   if (options.groupError !== undefined && !Number.isFinite(options.groupError)) {
     throw new Error("--group-error must be a finite number.");
   }
+  if (!Number.isFinite(options.maxMergedBytes) || options.maxMergedBytes < 1) {
+    throw new Error("--max-merged-bytes must be a positive size.");
+  }
+  if (options.maxMergedSpan !== undefined && (!Number.isFinite(options.maxMergedSpan) || options.maxMergedSpan <= 0)) {
+    throw new Error("--max-merged-span must be a positive number.");
+  }
 }
 
 function makeTileInfo(tile, index) {
@@ -207,6 +236,94 @@ function makeTileInfo(tile, index) {
     bounds,
     center: bounds ? boundsCenter(bounds) : undefined,
   };
+}
+
+async function attachSourceStats(tileInfos, inputDir) {
+  await Promise.all(tileInfos.map(async (info) => {
+    const uri = info.tile.content?.uri ?? info.tile.content?.url;
+    if (!uri) {
+      info.sourceBytes = 0;
+      return;
+    }
+
+    const sourcePath = path.resolve(inputDir, safeDecodeUri(stripUriQuery(uri)).replaceAll("/", path.sep));
+    const stat = await fsp.stat(sourcePath);
+    info.sourcePath = sourcePath;
+    info.sourceBytes = stat.size;
+  }));
+}
+
+function constrainMergeGroups(groups, options) {
+  return groups.flatMap((group) => splitConstrainedGroup(group, options))
+    .sort((a, b) => Math.min(...a.map((info) => info.index)) - Math.min(...b.map((info) => info.index)));
+}
+
+function splitConstrainedGroup(group, options) {
+  if (group.length <= 1 || isMergeGroupWithinLimits(group, options)) return [group];
+
+  const tooLargeSingle = group.filter((info) => (info.sourceBytes ?? 0) >= options.maxMergedBytes);
+  const rest = group.filter((info) => (info.sourceBytes ?? 0) < options.maxMergedBytes);
+  const result = tooLargeSingle.map((info) => [info]);
+
+  if (!rest.length) return result;
+
+  result.push(...splitGroupByBytesAndSpace(rest, options));
+  return result;
+}
+
+function splitGroupByBytesAndSpace(group, options) {
+  if (group.length <= 1 || isMergeGroupWithinLimits(group, options)) return [group];
+
+  const sorted = [...group].sort((a, b) => {
+    const axis = chooseLongestAxis(group);
+    const delta = a.center[axis] - b.center[axis];
+    return delta || a.index - b.index;
+  });
+  const left = [];
+  const right = [];
+  let leftBytes = 0;
+  let rightBytes = 0;
+
+  for (const info of sorted) {
+    if (leftBytes <= rightBytes) {
+      left.push(info);
+      leftBytes += info.sourceBytes ?? 0;
+    } else {
+      right.push(info);
+      rightBytes += info.sourceBytes ?? 0;
+    }
+  }
+
+  if (!left.length || !right.length) {
+    const middle = Math.ceil(sorted.length / 2);
+    return [
+      ...splitGroupByBytesAndSpace(sorted.slice(0, middle), options),
+      ...splitGroupByBytesAndSpace(sorted.slice(middle), options),
+    ];
+  }
+
+  return [
+    ...splitGroupByBytesAndSpace(left, options),
+    ...splitGroupByBytesAndSpace(right, options),
+  ];
+}
+
+function isMergeGroupWithinLimits(group, options) {
+  const bytes = group.reduce((sum, info) => sum + (info.sourceBytes ?? 0), 0);
+  if (bytes > options.maxMergedBytes && group.length > 1) return false;
+
+  if (options.maxMergedSpan !== undefined) {
+    const bounds = unionBounds(group.map((info) => info.bounds));
+    const span = Math.max(bounds.max[0] - bounds.min[0], bounds.max[1] - bounds.min[1]);
+    if (span > options.maxMergedSpan && group.length > 1) return false;
+  }
+
+  return true;
+}
+
+function chooseLongestAxis(group) {
+  const bounds = unionBounds(group.map((info) => info.bounds));
+  return bounds.max[0] - bounds.min[0] >= bounds.max[1] - bounds.min[1] ? 0 : 1;
 }
 
 function splitByQuadTree(tileInfos, targetGroupSize) {
@@ -872,7 +989,7 @@ function mergeCrossPrimitiveGroup(entries, target, chunks) {
   const indexValues = [];
 
   function getMergedVertexIndex(entry, sourceIndex) {
-    const key = `${entry.id}:${sourceIndex}`;
+    const key = makeCrossVertexKey(entry, attributeEntries, sourceIndex);
     let localIndex = vertexMap.get(key);
     if (localIndex !== undefined) return localIndex;
 
@@ -931,6 +1048,18 @@ function mergeCrossPrimitiveGroup(entries, target, chunks) {
 
 function copyCrossPrimitive(entry, target, chunks) {
   return mergeCrossPrimitiveGroup([entry], target, chunks);
+}
+
+function makeCrossVertexKey(entry, attributeEntries, sourceIndex) {
+  return Buffer.concat(attributeEntries.map(([semantic]) => {
+    const accessor = entry.gltf.accessors[entry.primitive.attributes[semantic]];
+    if (isBatchIdSemantic(semantic)) {
+      const buffer = Buffer.allocUnsafe(getAccessorElementSize(accessor));
+      copyBatchIdElement(entry.gltf, entry.bin, accessor, sourceIndex, buffer, 0, entry.batchOffset);
+      return buffer;
+    }
+    return copyAccessorElementToBuffer(entry.gltf, entry.bin, accessor, sourceIndex);
+  })).toString("base64");
 }
 
 function addCrossMergedAttributeAccessor(target, chunks, semantic, mergedVertices) {
