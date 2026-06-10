@@ -13,6 +13,20 @@ set https_proxy=
 set ALL_PROXY=
 set all_proxy=
 
+where patch.exe >nul 2>nul
+if errorlevel 1 (
+  call :add_git_usr_bin_to_path
+)
+
+where patch.exe >nul 2>nul
+if errorlevel 1 (
+  echo Failed to find patch.exe. Install Git for Windows or add Git\usr\bin to PATH.
+  pause
+  exit /b 1
+)
+
+if "%PKG_TARGET%"=="" set "PKG_TARGET=node22-win-x64"
+
 call npx --yes esbuild manualBuild\server.js --bundle --platform=node --format=cjs --outfile=dist\zbcx-web-pack.bundle.cjs
 if errorlevel 1 (
   echo Failed to bundle server.
@@ -20,7 +34,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-call npx --yes @yao-pkg/pkg dist\zbcx-web-pack.bundle.cjs --targets node20-win-x64 --output dist\zbcx-web-pack.exe
+call npx --yes @yao-pkg/pkg dist\zbcx-web-pack.bundle.cjs --targets %PKG_TARGET% --output dist\zbcx-web-pack.exe
 if errorlevel 1 (
   echo Failed to build exe.
   pause
@@ -37,3 +51,28 @@ echo {} > "dist\autoBuild\build-history.json"
 echo Built dist\zbcx-web-pack.exe
 echo Empty config file: dist\autoBuild\cfg.yaml
 pause
+exit /b 0
+
+:add_git_usr_bin_to_path
+for /f "delims=" %%G in ('where git.exe 2^>nul') do (
+  if exist "%%~dpG..\usr\bin\patch.exe" (
+    set "PATH=%%~dpG..\usr\bin;%PATH%"
+    exit /b 0
+  )
+  if exist "%%~dpG..\..\usr\bin\patch.exe" (
+    set "PATH=%%~dpG..\..\usr\bin;%PATH%"
+    exit /b 0
+  )
+)
+
+if exist "%ProgramFiles%\Git\usr\bin\patch.exe" (
+  set "PATH=%ProgramFiles%\Git\usr\bin;%PATH%"
+  exit /b 0
+)
+
+if exist "%ProgramFiles(x86)%\Git\usr\bin\patch.exe" (
+  set "PATH=%ProgramFiles(x86)%\Git\usr\bin;%PATH%"
+  exit /b 0
+)
+
+exit /b 0
