@@ -10,6 +10,9 @@ const projectEditor = document.getElementById('projectEditor');
 const historyList = document.getElementById('historyList');
 const toast = document.getElementById('toast');
 const buildBtn = document.getElementById('buildBtn');
+const historyDetailDialog = document.getElementById('historyDetailDialog');
+const historyDetailTitle = document.getElementById('historyDetailTitle');
+const historyDetailContent = document.getElementById('historyDetailContent');
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -124,6 +127,16 @@ function formatTime(value) {
   return date.toLocaleString('zh-CN', { hour12: false });
 }
 
+function openHistoryDetail(projectName, recordIndex) {
+  const record = historyState[projectName]?.[recordIndex];
+  if (!record?.message) return;
+
+  const statusText = record.status === 'success' ? '成功详情' : '错误详情';
+  historyDetailTitle.textContent = statusText;
+  historyDetailContent.textContent = record.message;
+  historyDetailDialog.showModal();
+}
+
 function renderHistory() {
   const projectName = projectSelect.value;
   const records = historyState[projectName] || [];
@@ -138,19 +151,26 @@ function renderHistory() {
     return;
   }
 
-  historyList.innerHTML = records.slice(0, 10).map((record) => {
+  historyList.innerHTML = records.slice(0, 10).map((record, index) => {
     const statusText = record.status === 'success' ? '成功' : '失败';
     const typeText = record.buildType === 'full' ? '全量包' : '补丁包';
     const dateText = record.buildType === 'patch' ? ` / ${record.date || '-'}` : '';
-    const message = record.message ? `<div class="history-error">${record.message}</div>` : '';
+    const detailButton = record.status !== 'success' && record.message
+      ? `<button class="history-detail-btn" type="button" data-history-index="${index}">查看详情</button>`
+      : '';
+    const message = record.status === 'success' && record.message
+      ? `<span class="history-message">${record.message}</span>`
+      : '';
     return `
       <article class="history-item ${record.status === 'success' ? 'ok' : 'fail'}">
         <div class="history-main">
           <span class="history-status">${statusText}</span>
           <span>${typeText}${dateText}</span>
         </div>
-        <div class="history-time">${formatTime(record.finishedAt || record.startedAt)}</div>
-        ${message}
+        <div class="history-meta">
+          <span>${formatTime(record.finishedAt || record.startedAt)}</span>
+          ${message || detailButton}
+        </div>
       </article>
     `;
   }).join('');
@@ -354,6 +374,13 @@ document.getElementById('refreshHistoryBtn').addEventListener('click', async () 
   } catch (error) {
     showToast(error.message, true);
   }
+});
+
+historyList.addEventListener('click', (event) => {
+  const detailButton = event.target.closest('[data-history-index]');
+  if (!detailButton) return;
+
+  openHistoryDetail(projectSelect.value, Number(detailButton.dataset.historyIndex));
 });
 
 document.querySelectorAll('input[name="buildType"]').forEach((input) => {

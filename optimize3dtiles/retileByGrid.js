@@ -79,6 +79,7 @@ async function main() {
     options,
     totals,
   });
+  updateInternalBoundingVolumes(tileset.root);
 
   await fsp.mkdir(path.dirname(outputTileset), { recursive: true });
   await fsp.writeFile(outputTileset, `${JSON.stringify(tileset, null, 2)}\n`);
@@ -228,6 +229,9 @@ async function retileNode(tile, context) {
   }
 
   delete tile.content;
+  tile.boundingVolume = {
+    box: unionBoxes(split.parts.map((part) => part.box)),
+  };
   tile.children = [
     ...split.parts.map((part, index) => {
       const outputName = `${relativePrefix}_part_${String(index).padStart(3, "0")}.b3dm`;
@@ -844,6 +848,62 @@ function boundsToBox(bounds) {
     0, half[1], 0,
     0, 0, half[2],
   ];
+}
+
+function boxToBounds(box) {
+  const center = [box[0], box[1], box[2]];
+  const radius = [
+    Math.abs(box[3]) + Math.abs(box[6]) + Math.abs(box[9]),
+    Math.abs(box[4]) + Math.abs(box[7]) + Math.abs(box[10]),
+    Math.abs(box[5]) + Math.abs(box[8]) + Math.abs(box[11]),
+  ];
+  return {
+    min: [
+      center[0] - radius[0],
+      center[1] - radius[1],
+      center[2] - radius[2],
+    ],
+    max: [
+      center[0] + radius[0],
+      center[1] + radius[1],
+      center[2] + radius[2],
+    ],
+  };
+}
+
+function unionBoxes(boxes) {
+  const bounds = createBounds();
+  for (const box of boxes) {
+    const child = boxToBounds(box);
+    expandBounds(bounds, child.min);
+    expandBounds(bounds, child.max);
+  }
+  return boundsToBox(bounds);
+}
+
+function updateInternalBoundingVolumes(tile) {
+  if (!tile?.children?.length) return boundsFromBoundingVolume(tile?.boundingVolume);
+
+  const childBounds = [];
+  for (const child of tile.children) {
+    const bounds = updateInternalBoundingVolumes(child);
+    if (bounds) childBounds.push(bounds);
+  }
+
+  if (!childBounds.length) return boundsFromBoundingVolume(tile.boundingVolume);
+
+  const bounds = createBounds();
+  for (const child of childBounds) {
+    expandBounds(bounds, child.min);
+    expandBounds(bounds, child.max);
+  }
+  tile.boundingVolume = { box: boundsToBox(bounds) };
+  return bounds;
+}
+
+function boundsFromBoundingVolume(boundingVolume) {
+  if (!boundingVolume?.box) return undefined;
+  return boxToBounds(boundingVolume.box);
 }
 
 function chooseGrid(bounds, targetParts) {

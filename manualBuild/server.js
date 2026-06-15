@@ -145,7 +145,7 @@ app.post('/api/build', async (req, res) => {
       finishedAt: new Date().toISOString(),
       message: error.message,
     });
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: '打包失败，请在打包记录中查看详情。' });
   } finally {
     activeTask = null;
   }

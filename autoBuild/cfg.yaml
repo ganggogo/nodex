@@ -22,7 +22,7 @@ prjs:
       - sunyr@whzbcx.com
       - wanghaichang@whzbcx.com
     workspaces: []
-  - name: 江苏大数据服务平台(汇交平台)
+  - name: 江苏大数据服务平台(场景应用)
     namee: js_dz_dsjfwzx_web
     path: E:\2023Prjs\江苏省大数据平台\项目工程\js_dz_dsjfwzx_web
     branch: main
