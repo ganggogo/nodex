@@ -144,6 +144,57 @@ rtk node optimize3dtiles/createMaterialTestTileset.js static/models/横琴示范
 
 - 这是诊断脚本，不一定适合作为正式交付模型。
 
+### createEarlyZTestTileset.js
+
+Early-Z / overdraw 诊断输出脚本。
+
+作用：
+
+- 强制材质走不透明渲染路径，移除 `BLEND` / `MASK` alpha 状态和 `alphaCutoff`。
+- 默认关闭 `doubleSided`，减少背面重复光栅化。
+- 默认移除贴图引用并使用纯色材质，可选 `--keep-textures` 保留贴图。
+- 不改变几何、索引、batchTable、tile 树和 b3dm 数量。
+
+示例：
+
+```powershell
+rtk node optimize3dtiles/createEarlyZTestTileset.js static/models/横琴示范区_retiled_dedup_tex25_shell.json static/models/横琴示范区_retiled_dedup_tex25_shell_earlyz.json
+```
+
+如果这个版本 FPS 明显提升，说明瓶颈大概率来自 alpha/blend/double-sided 导致的 early-z 失效和 overdraw；后续正式方案应优先把显示层材质改成不透明、单面、少 discard 的路径。
+
+可选参数：
+
+```powershell
+--keep-double-sided
+--keep-textures
+--unlit
+--color 0.72,0.68,0.55,1
+```
+
+### createMeshoptReorderTileset.js
+
+Meshopt 无损重排脚本。
+
+作用：
+
+- 对每个 `.b3dm` 内的 triangle primitive 执行 `MeshoptEncoder.reorderMesh`。
+- 重排 index buffer 和所有 vertex attribute stream，改善 GPU 顶点缓存和渲染局部性。
+- 不删三角面，不做几何简化，不改材质或 tile 树。
+- 对小于 65536 顶点的 primitive 会写出 `uint16` 索引，通常会顺带减小体积。
+
+示例：
+
+```powershell
+rtk node optimize3dtiles/createMeshoptReorderTileset.js static/models/横琴示范区_retiled_dedup_tex25_shell.json static/models/横琴示范区_retiled_dedup_tex25_shell_reordered.json
+```
+
+默认偏向渲染局部性；如果更想压缩传输体积，可以加：
+
+```powershell
+--opt-size
+```
+
 ### createMeshoptSimplifyTileset.js
 
 边折叠三角面简化测试脚本。
